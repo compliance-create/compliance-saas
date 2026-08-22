@@ -1,0 +1,16 @@
+{
+  "version": "2.0",
+  "envId": "your-cloudbase-env-id",
+  "functionRoot": "./.cloudfunctions",
+  "framework": {
+    "name": "nextjs",
+    "plugins": {
+      "client": {
+        "name": "next-starter",
+        "options": {
+          "use": "@cloudbase/next-framework"
+        }
+      }
+    }
+  }
+}

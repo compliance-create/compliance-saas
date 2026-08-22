@@ -1,0 +1,335 @@
+// Prisma schema for compliance SaaS
+// Vercel 部署: PostgreSQL (推荐 Vercel Postgres / Neon / Supabase)
+// 本地开发: 也可以用本地 Postgres; 若要继续用 SQLite, 把 provider 改回 "sqlite" + DATABASE_URL=file:./prisma/dev.db
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================
+// NextAuth 必需�?// =====================
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String? // 邮箱密码登录(自实�?NextAuth Credentials)
+  phone         String?   @unique
+  wechatOpenid  String?   @unique // 微信开放平�?openid(扫码登录)
+  wechatUnionid String?   @unique
+  miniOpenid    String?   @unique // 微信小程�?openid
+  companyName   String?
+  industryCode  String? // 行业代码,用于方法论引�?  role          String    @default("USER") // USER | ADMIN | SUPER_ADMIN
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  subscriptions Subscription[]
+  auditRuns     AuditRun[]
+  reports       Report[]
+  documents     Document[]
+  assumptions   IndustryAssumption[]
+  cmsRevisions  CmsRevision[]
+  aiConversations AiConversation[]
+  contractReviews ContractReview[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// =====================
+// 订阅 / 计费
+// =====================
+model Subscription {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planCode            String // ANNUAL_PACK | TRIAL
+  status              String // ACTIVE | EXPIRED | CANCELLED | PENDING
+  startedAt           DateTime  @default(now())
+  expiresAt           DateTime
+  cancelledAt         DateTime?
+  // 微信支付字段
+  wechatOrderNo       String?   @unique
+  wechatTransactionId String?   @unique
+  paidAt              DateTime?
+  paidAmountCents     Int? // �?  // 含模块清�?JSON),�? ["labour","contract"]
+  includedModulesJson String    @default("[]")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId, status])
+}
+
+// =====================
+// 模块 / 内容
+// =====================
+model Module {
+  id          String   @id @default(cuid())
+  slug        String   @unique // labour | contract | tax (future)
+  name        String
+  description String
+  category    String // labour | contract | tax | data | finance
+  iconName    String? // lucide 图标�?  orderIndex  Int      @default(0)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items     ChecklistItem[]
+  versions  ModuleVersion[]
+  auditRuns AuditRun[]
+  reports   Report[]
+  cmsPages  CmsPage[]
+}
+
+model ModuleVersion {
+  id          String   @id @default(cuid())
+  moduleId    String
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  version     String // v1.0.0
+  changelog  String
+  publishedAt DateTime @default(now())
+  isActive    Boolean  @default(false)
+
+  @@index([moduleId, isActive])
+}
+
+model ChecklistItem {
+  id            String   @id @default(cuid())
+  moduleId      String
+  module        Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  chapter       String // 第几�?  chapterTitle  String
+  orderIndex    Int
+  title         String // 审核事项
+  keyPoints     String // 审核要点
+  legalBasis    String // 法律依据(JSON 数组,适配多部法律)
+  riskLevel     String // HIGH | MID | LOW
+  // 方法论引擎字�?  impactKey     String? // 量化引擎 key:�?'overtime_pay_underpay'
+  impactFormula String? // 公式:loss_per_year = base_salary * 0.5 * 12
+  // 动态表�?schema(JSON)
+  answerSchema  String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  answers AuditAnswer[]
+
+  @@index([moduleId, chapter, orderIndex])
+}
+
+// =====================
+// 审核 / 报告
+// =====================
+model AuditRun {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleId        String
+  module          Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  companySnapshot String? // 公司基本信息快照(JSON)
+  status          String   @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED | ARCHIVED
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  // 行业假设(方法论量化所需)
+  revenueCents    Int? // 年营�?�?
+  grossMargin     Float? // 毛利�?  headcount       Int? // 员工�?  industryCode    String?
+
+  answers   AuditAnswer[]
+  report    Report?
+
+  @@index([userId, moduleId, status])
+}
+
+model AuditAnswer {
+  id              String   @id @default(cuid())
+  runId           String
+  run             AuditRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            ChecklistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  // 用户回答(对应 answerSchema 动态表�?
+  answerJson      String   @default("{}")
+  // 量化引擎计算结果
+  impactCents     Int? // 风险折算的现金损�?�?
+  impactNarrative String? // 文字解释
+  computedAt      DateTime?
+
+  @@unique([runId, itemId])
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runId       String   @unique
+  run         AuditRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  moduleId    String
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  // 报告内容
+  summaryJson String // 高管摘要结构化数�?  // 量化汇�?  totalImpactCents   Int    @default(0)
+  highRiskCount      Int    @default(0)
+  midRiskCount       Int    @default(0)
+  lowRiskCount       Int    @default(0)
+  // 评级:�?�?�?  rating       String
+  // 行业方法论视角下的额外指�?  revenueImpactPct  Float?
+  profitImpactPct   Float?
+  generatedAt  DateTime @default(now())
+
+  documents Document[]
+
+  @@index([userId, moduleId])
+}
+
+model Document {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportId     String?
+  report       Report?  @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  // 底稿 / 摘要 / 完整报告
+  docType      String // WORKING | SUMMARY | FULL
+  format       String // PDF | DOCX
+  storageKey   String // 对象存储 key / 本地路径
+  sizeBytes    Int?
+  generatedAt  DateTime @default(now())
+
+  @@index([userId, docType])
+}
+
+// =====================
+// 行业方法�?/ 量化引擎
+// =====================
+model IndustryAssumption {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  industryCode  String
+  revenueCents  Int
+  grossMargin   Float
+  headcount     Int
+  avgSalaryCents Int     @default(0)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// =====================
+// 后台 CMS
+// =====================
+model CmsPage {
+  id        String   @id @default(cuid())
+  moduleId  String?
+  module    Module?  @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  slug      String   @unique
+  title     String
+  body      String // Markdown
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  revisions CmsRevision[]
+}
+
+model CmsRevision {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      CmsPage  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+}
+
+// =====================
+// AI 问答历史
+// =====================
+model AiConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String   // 自动从首条消息截�?  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages AiChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model AiChatMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // user | assistant
+  content        String
+  // 关联到报�?审核(可�? �?AI 回答有上下文)
+  relatedReportId String?
+  relatedRunId    String?
+  tokensIn        Int?
+  tokensOut       Int?
+  createdAt       DateTime       @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// =====================
+// 合同审阅(批量 + 上传)
+// =====================
+model ContractReview {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // 批量审阅�? 一�?batchId 关联多条
+  batchId   String?
+  fileName  String
+  fileSize  Int
+  fileKind  String // docx | pdf | text | image
+  pages     Int?
+  textLength Int
+  reviewJson String  // 完整 AI 审阅 JSON
+  rating     String?
+  riskCount  Int     @default(0)
+  impactCents Int    @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([batchId])
+}

@@ -1,0 +1,58 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# prisma
+/prisma/migrations/dev
+/prisma/dev.db
+/prisma/*.db
+/prisma/*.db-journal
+
+# 微信支付证书(私密, 切勿提交)
+/certs/
+
+# 临时测试文件
+/test/sample-*
+
+# IDE
+.vscode/
+.idea/
+
+# tcb
+.cloudbaserc
+.tcb
+
+# generated docs
+/public/docs/generated
