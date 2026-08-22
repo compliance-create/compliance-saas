@@ -56,3 +56,4 @@ next-env.d.ts
 
 # generated docs
 /public/docs/generated
+/git-commit-msg.txt
