@@ -205,25 +205,35 @@ npm start
 每个审核点的 `impactKey` 关联一条公式, 用户回答时录入数字字段(影响人数/金额/比率),
 引擎即时计算并展示在报告里。
 
-## ☁️ 部署到腾讯云开发 (CloudBase)
+## ☁️ 部署
+
+### 方案 A: 腾讯云轻量服务器 (推荐 · 国内访问最快)
+24 元/月, 全控制, 适合 100 用户内 MVP。
 
 ```bash
-# 1. 安装 CLI
+# 1. 买 Lighthouse (上海/广州, Ubuntu 22.04, 2C2G, 24元/月)
+# 2. 域名注册 + ICP 备案 (1-7 天)
+# 3. 一键部署:
+ssh root@你的服务器IP
+curl -fsSL https://raw.githubusercontent.com/compliance-create/compliance-saas/main/deploy/lighthouse.sh | bash
+# 4. 装 SSL:
+certbot --nginx -d 你的域名
+```
+
+详细见 `docs/LIGHTHOUSE_DEPLOY.md` (10KB 完整手册)
+
+### 方案 B: 腾讯云开发 CloudBase (serverless)
+无需运维, 按调用付费。**注意: CloudBase 部署 Next.js 在国内某些场景有 SSR 限制, 复杂模块建议方案 A。**
+
+```bash
 npm i -g @cloudbase/cli
 tcb login
-
-# 2. 编辑 cloudbaserc.json, 填入你的 envId
-# 3. 一键部署
+# 编辑 cloudbaserc.json 填入 envId
 npm run deploy:cloudbase
 ```
 
-CloudBase 自动:
-- 构建 Next.js
-- 部署到云函数 + 云托管
-- 开通云数据库 PostgreSQL
-- 申请/校验域名 SSL
-
-数据库连接串会自动注入到 `DATABASE_URL`。
+### 方案 C: Vercel (国外, 仅海外用户)
+适合海外访问场景, 国内慢且 ICP 备案麻烦。详细见 `docs/VERCEL_DEPLOY.md`。
 
 ## 🛠️ 维护 & 升级
 
